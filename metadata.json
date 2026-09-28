@@ -1,0 +1,6 @@
+{
+  "name": "BudgetTrip AI",
+  "description": "AI-powered budget travel planning platform that analyzes your budget, dates, and preferences to recommend realistic affordable destinations, complete cost breakdowns, hotel comparisons, itineraries, and cost-reduction agents.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
