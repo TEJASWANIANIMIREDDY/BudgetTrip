@@ -1,5 +1,5 @@
-import React, { useEffect, useState } from 'react';
-import { Sparkles, CheckCircle2, Loader2, Compass, Coins, Plane, Hotel } from 'lucide-react';
+import React, { useEffect, useState, useRef } from 'react';
+import { Sparkles, CheckCircle2, Loader2, Compass, Coins, Plane, Hotel, ArrowRight } from 'lucide-react';
 import { UserInput, Currency } from '../types/travel';
 import { formatCurrency } from '../utils/formatters';
 
@@ -10,12 +10,12 @@ interface AgentActivityProps {
 }
 
 const AGENT_STEPS = [
-  { id: 1, text: 'Understanding your budget', icon: Coins, delay: 600 },
-  { id: 2, text: 'Checking destination suitability', icon: Compass, delay: 1300 },
-  { id: 3, text: 'Estimating transportation costs', icon: Plane, delay: 2000 },
-  { id: 4, text: 'Estimating accommodation costs', icon: Hotel, delay: 2700 },
-  { id: 5, text: 'Comparing activities', icon: Sparkles, delay: 3400 },
-  { id: 6, text: 'Building your travel plan', icon: CheckCircle2, delay: 4100 },
+  { id: 1, text: 'Understanding your budget', icon: Coins, delay: 500 },
+  { id: 2, text: 'Checking destination suitability', icon: Compass, delay: 1100 },
+  { id: 3, text: 'Estimating transportation costs', icon: Plane, delay: 1700 },
+  { id: 4, text: 'Estimating accommodation costs', icon: Hotel, delay: 2300 },
+  { id: 5, text: 'Comparing activities', icon: Sparkles, delay: 2900 },
+  { id: 6, text: 'Building your travel plan', icon: CheckCircle2, delay: 3500 },
 ];
 
 export const AgentActivity: React.FC<AgentActivityProps> = ({
@@ -25,20 +25,38 @@ export const AgentActivity: React.FC<AgentActivityProps> = ({
 }) => {
   const [completedSteps, setCompletedSteps] = useState<number[]>([]);
   const [currentStepIndex, setCurrentStepIndex] = useState<number>(0);
+  const timeoutsRef = useRef<NodeJS.Timeout[]>([]);
 
   useEffect(() => {
+    // Clear any previous timers
+    timeoutsRef.current.forEach(clearTimeout);
+    timeoutsRef.current = [];
+
     AGENT_STEPS.forEach((step, idx) => {
-      setTimeout(() => {
+      const t = setTimeout(() => {
         setCurrentStepIndex(idx);
-        setCompletedSteps(prev => [...prev, step.id]);
+        setCompletedSteps(prev => (prev.includes(step.id) ? prev : [...prev, step.id]));
         if (idx === AGENT_STEPS.length - 1) {
-          setTimeout(() => {
+          const finishTimer = setTimeout(() => {
             onComplete();
-          }, 800);
+          }, 600);
+          timeoutsRef.current.push(finishTimer);
         }
       }, step.delay);
+      timeoutsRef.current.push(t);
     });
+
+    return () => {
+      timeoutsRef.current.forEach(clearTimeout);
+      timeoutsRef.current = [];
+    };
   }, [onComplete]);
+
+  const handleSkip = () => {
+    timeoutsRef.current.forEach(clearTimeout);
+    timeoutsRef.current = [];
+    onComplete();
+  };
 
   return (
     <div className="max-w-xl mx-auto py-12 px-4">
@@ -112,10 +130,20 @@ export const AgentActivity: React.FC<AgentActivityProps> = ({
           })}
         </div>
 
-        {/* Footer Note */}
-        <div className="mt-8 text-center text-xs text-slate-400 dark:text-slate-500 flex items-center justify-center gap-1.5">
-          <span className="w-2 h-2 rounded-full bg-emerald-500 animate-ping" />
-          Cross-referencing airline routing & seasonal hotel pricing...
+        {/* Footer & Skip Button */}
+        <div className="mt-8 flex flex-col sm:flex-row items-center justify-between gap-3 pt-4 border-t border-slate-100 dark:border-slate-800">
+          <div className="text-xs text-slate-400 dark:text-slate-500 flex items-center gap-1.5">
+            <span className="w-2 h-2 rounded-full bg-emerald-500 animate-ping" />
+            Analyzing flight routes & hotel baselines...
+          </div>
+          <button
+            type="button"
+            onClick={handleSkip}
+            className="inline-flex items-center gap-1.5 text-xs font-bold text-emerald-600 dark:text-emerald-400 hover:text-emerald-700 dark:hover:text-emerald-300 px-3 py-1.5 rounded-lg hover:bg-emerald-50 dark:hover:bg-slate-800 transition-colors cursor-pointer"
+          >
+            View Recommendations
+            <ArrowRight className="w-3.5 h-3.5" />
+          </button>
         </div>
       </div>
     </div>

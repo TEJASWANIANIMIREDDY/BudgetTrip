@@ -138,6 +138,7 @@ export interface ChatMessage {
   role: 'user' | 'assistant';
   content: string;
   timestamp: string;
+  source?: 'n8n' | 'gemini' | 'system';
   actionTriggered?: {
     type: 'APPLY_DISCOUNT' | 'CHANGE_HOTEL' | 'REPLACE_DAY' | 'ALERT';
     payload?: any;

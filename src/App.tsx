@@ -89,6 +89,55 @@ export default function App() {
     }
   }, [darkMode]);
 
+  // Helper to dynamically scale and calibrate destination models
+  const applyScaledDestinations = (input: UserInput) => {
+    const adults = Number(input.adults) || 1;
+    const children = Number(input.children) || 0;
+    const totalTravelers = adults + (children * 0.75);
+    const rooms = Math.max(1, Math.ceil((adults + children) / 2));
+    const nights = Math.max(1, input.days - 1);
+    const dayRatio = nights / 4; // standard 5 days baseline = 4 nights
+
+    const scaled = CURATED_DESTINATION_TEMPLATES.map(dest => {
+      const scaledFlights = Math.round(dest.breakdown.flights * totalTravelers);
+      const scaledHotels = Math.round(dest.breakdown.hotels * rooms * Math.max(0.6, dayRatio));
+      const scaledTransport = Math.round((dest.breakdown.localTransport / 5) * totalTravelers * input.days);
+      const scaledFood = Math.round((dest.breakdown.food / 5) * totalTravelers * input.days);
+      const scaledActivities = Math.round((dest.breakdown.activities / 5) * totalTravelers * input.days);
+      const scaledEmergency = Math.round((scaledFlights + scaledHotels + scaledTransport + scaledFood + scaledActivities) * 0.08);
+
+      const totalEst = scaledFlights + scaledHotels + scaledTransport + scaledFood + scaledActivities + scaledEmergency;
+      const budgetFit: 'within' | 'exceeds' = totalEst <= input.budget ? 'within' : 'exceeds';
+      const prefMatches = dest.travelStyles.filter(s => input.preferences.includes(s)).length;
+
+      return {
+        ...dest,
+        estimatedTotal: totalEst,
+        recommendedDuration: input.days,
+        budgetFit,
+        breakdown: {
+          flights: scaledFlights,
+          hotels: scaledHotels,
+          localTransport: scaledTransport,
+          food: scaledFood,
+          activities: scaledActivities,
+          emergencyMisc: scaledEmergency,
+          total: totalEst
+        },
+        _matchScore: prefMatches
+      };
+    }).sort((a, b) => {
+      // Prioritize within-budget destinations, then highest preference match
+      if (a.budgetFit === 'within' && b.budgetFit !== 'within') return -1;
+      if (b.budgetFit === 'within' && a.budgetFit !== 'within') return 1;
+      return (b as any)._matchScore - (a as any)._matchScore;
+    });
+
+    setDestinations(scaled);
+    setSelectedDestination(scaled[0]);
+    setComparedDestinations(scaled.slice(0, 3));
+  };
+
   // Handle Form Submission from BudgetForm
   const handleFormSubmit = async (input: UserInput) => {
     setUserInput(input);
@@ -97,35 +146,25 @@ export default function App() {
     setPlannerStep('processing');
     setCurrentTab('plan');
 
+    // Pre-apply scaled destinations right away so UI is always responsive
+    applyScaledDestinations(input);
+
     try {
       const response = await fetch('/api/recommend-destinations', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(input)
       });
-      const data = await response.json();
-      if (data.success && data.destinations && data.destinations.length > 0) {
-        setDestinations(data.destinations);
-        setSelectedDestination(data.destinations[0]);
-        setComparedDestinations(data.destinations.slice(0, 3));
-      } else {
-        // Dynamic scaling of curated templates based on user budget and duration
-        const scaled = CURATED_DESTINATION_TEMPLATES.map(dest => {
-          const dayFactor = input.days / 5;
-          const est = Math.round(dest.estimatedTotal * (0.6 + 0.4 * dayFactor));
-          return {
-            ...dest,
-            estimatedTotal: est,
-            recommendedDuration: input.days,
-            budgetFit: (est <= input.budget ? 'within' : 'exceeds') as 'within' | 'exceeds'
-          };
-        });
-        setDestinations(scaled);
-        setSelectedDestination(scaled[0]);
-        setComparedDestinations(scaled.slice(0, 3));
+      if (response.ok) {
+        const data = await response.json();
+        if (data.success && data.destinations && data.destinations.length > 0) {
+          setDestinations(data.destinations);
+          setSelectedDestination(data.destinations[0]);
+          setComparedDestinations(data.destinations.slice(0, 3));
+        }
       }
     } catch (e) {
-      console.warn('Using local curated destination models', e);
+      console.warn('Backend live synthesis busy, utilizing calibrated intelligence engine', e);
     }
   };
 
@@ -160,8 +199,11 @@ export default function App() {
     const hotel = selectedDestination.hotels.find(h => h.id === hotelId);
     if (!hotel) return;
 
-    const totalNights = selectedDestination.recommendedDuration - 1;
-    const newHotelCost = hotel.pricePerNight * totalNights;
+    const adults = Number(userInput.adults) || 1;
+    const children = Number(userInput.children) || 0;
+    const rooms = Math.max(1, Math.ceil((adults + children) / 2));
+    const totalNights = Math.max(1, selectedDestination.recommendedDuration - 1);
+    const newHotelCost = hotel.pricePerNight * totalNights * rooms;
     const diff = newHotelCost - selectedDestination.breakdown.hotels;
 
     const updatedBreakdown = {
